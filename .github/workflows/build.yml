@@ -1,0 +1,50 @@
+name: Compilar RubiMod
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar el proyecto
+        run: |
+          ls -la
+          if ls ./*.zip >/dev/null 2>&1; then
+            mkdir -p proyecto
+            for z in ./*.zip; do unzip -o -q "$z" -d proyecto; done
+          fi
+          BG=$(find . -name build.gradle -not -path './.git/*' | head -1)
+          if [ -z "$BG" ]; then
+            echo "No encontré build.gradle. Archivos del repo:"
+            find . -not -path './.git/*' | head -60
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(dirname "$BG")" >> "$GITHUB_ENV"
+          echo "Proyecto en: $(dirname "$BG")"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Instalar Gradle 4.9
+        run: |
+          curl -fsSL https://services.gradle.org/distributions/gradle-4.9-bin.zip -o "$HOME/gradle.zip"
+          unzip -q "$HOME/gradle.zip" -d "$HOME"
+          echo "$HOME/gradle-4.9/bin" >> "$GITHUB_PATH"
+
+      - name: Compilar el mod
+        run: |
+          cd "$PROJECT_DIR"
+          gradle setupCIWorkspace build --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rubimod-jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
+          if-no-files-found: error
